@@ -66,9 +66,7 @@ podman run \
   --mount type=bind,source=/home/$USER/Downloads,destination=/home/$USER/Downloads \
   --mount type=bind,source=/home/$USER/.ssh,destination=/home/$USER/.ssh \
   --mount type=volume,source=devenv-maven-cache,destination=/home/$USER/.m2/repository \
-  --mount type=volume,source=devenv-source-directory,destination=/home/$USER/source \
-  --mount type=volume,source=devenv-eclipse-config,destination=/home/$USER/.eclipse \
-  --mount type=volume,source=devenv-eclipse-workspace,destination=/home/$USER/eclipse-workspace \
+  --mount type=volume,source=devenv-source-directory,destination=/home/$USER/work \
   --mount type=volume,source=devenv-java-user-preferences,destination=/home/$USER/.java \
   --name devenv \
   devenv

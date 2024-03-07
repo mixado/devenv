@@ -8,6 +8,17 @@ ARG EMAIL
 
 # Use bash instead of sh to be able to use process substitution in RUN commands.
 SHELL ["/bin/bash", "-c"]
+RUN apt update && apt upgrade -y && \
+  export DEBIAN_FRONTEND="noninteractive" && \
+  export TZ="Europe/Stockholm" && \
+  apt install -y wget \
+  gpg 
+
+# Add repo for VS Code
+RUN wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg && \
+  install -D -o root -g root -m 644 packages.microsoft.gpg /etc/apt/keyrings/packages.microsoft.gpg && \
+  sh -c 'echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list' && \
+  rm -f packages.microsoft.gpg
 
 # Install software!
 #
@@ -53,7 +64,10 @@ RUN apt update && apt upgrade -y && \
   vim \
   wget \
   x11-apps \
-  zlib1g-dev
+  zlib1g-dev \
+  apt-transport-https \
+  code \
+  zsh
 
 # Make podman use remote by default.
 # This is much easier to achieve by using the CONTAINER_HOST environment variable on more modern versions of podman.
@@ -65,6 +79,7 @@ RUN \
 # Make sure we're using the latest pip
 RUN \
   pip install --upgrade pip wheel setuptools Cython
+
 
 # Yq is not published in any apt repo that I trust, so let's take it directly from github.
 #
@@ -96,31 +111,6 @@ RUN \
   cd /usr/bin && \
   ln -s ${MAVENHOME}/bin/mvn mvn
 
-# Eclipse
-#
-# See above for detailed explanation about what's going on here. Here the cd command will save us in case the
-# substituted process fails.
-#
-RUN \
-  cd /opt && \
-  curl -L https://ftp.acc.umu.se/mirror/eclipse.org/technology/epp/downloads/release/2023-12/R/eclipse-jee-2023-12-R-linux-gtk-x86_64.tar.gz | \
-    tee >(tar xz --no-same-owner -f-) | \
-    sha512sum -c <(echo "684e54d44e3ea815a9da75f4688cbcd0696bf02c542518483c61259350c6da5159d6e40eb56779aff170027b5714592789825d7a7f76cae10def5ea5fe98699b -") && \
-  cd eclipse* && \
-  ECLIPSEHOME=$(pwd) && \
-  cd /usr/bin && \
-  ln -s ${ECLIPSEHOME}/eclipse eclipse && \
-  echo '-Dorg.eclipse.oomph.setup.donate=false' >> /opt/eclipse/eclipse.ini
-
-# Protobuf compiler
-RUN \
-  cd /usr/bin && \
-  curl -L https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-linux-x86_64.zip --output protoc.zip && \
-  sha512sum -c <(echo "75da030a2c9fb3ccd689a2beaeab42d44803b314410f6578c7af030d1ac29d3de1260a4fb50eca5c8efbcd1ac4a94b4a130e45afebf8a182d6c1d3241a2f8dba protoc.zip") && \
-  unzip -p protoc.zip bin/protoc > protoc && \
-  chmod 755 protoc && \
-  rm protoc.zip
-
 # Node.js
 RUN \
   cd /opt && \
@@ -151,7 +141,15 @@ RUN \
   useradd -u $USERID -g $GROUPID --create-home --home-dir /home/$USERNAME -s /bin/bash $USERNAME && \
   chown -R $USERNAME:$USERNAME /home/$USERNAME
 
+# Add to sudoers
+RUN \
+  echo "$USERNAME ALL=NOPASSWD: ALL" >> /etc/sudoers
+
 USER $USERNAME
+
+# Setup VS Code Extensions
+RUN \
+  code --install-extension vscjava.vscode-java-pack --install-extension dotjoshjohnson.xml --install-extension visualstudioexptteam.vscodeintellicode --install-extension ms-python.python
 
 # JMeter and Custom Thread Groups plugin
 # Must be installed as user, not root, otherwise plugin manager won't work with Taurus.
@@ -262,26 +260,8 @@ RUN \
   chmod 700 ~/.m2 && \
   mkdir ~/.m2/repository && \
   chmod 700 ~/.m2/repository && \
-  mkdir ~/.eclipse && \
-  chmod 700 ~/.eclipse && \
-  mkdir ~/eclipse-workspace && \
-  chmod 700 ~/eclipse-workspace && \
-  mkdir ~/source && \
-  chmod 700 ~/source
-
-# Eclipse preferences
-RUN \
-  mkdir -p                                            ~/eclipse-workspace/.metadata/.plugins/org.eclipse.core.runtime/.settings/
-COPY org.eclipse.ui.workbench.prefs     /home/$USERNAME/eclipse-workspace/.metadata/.plugins/org.eclipse.core.runtime/.settings/org.eclipse.ui.workbench.prefs
-COPY org.eclipse.ui.ide.prefs.workspace /home/$USERNAME/eclipse-workspace/.metadata/.plugins/org.eclipse.core.runtime/.settings/org.eclipse.ui.ide.prefs
-COPY org.eclipse.jdt.ui.prefs           /home/$USERNAME/eclipse-workspace/.metadata/.plugins/org.eclipse.core.runtime/.settings/org.eclipse.jdt.ui.prefs
-COPY org.eclipse.ui.editors.prefs       /home/$USERNAME/eclipse-workspace/.metadata/.plugins/org.eclipse.core.runtime/.settings/org.eclipse.ui.editors.prefs
-COPY org.eclipse.wst.xml.core.prefs     /home/$USERNAME/eclipse-workspace/.metadata/.plugins/org.eclipse.core.runtime/.settings/org.eclipse.wst.xml.core.prefs
-RUN \
-  mkdir -p                                            ~/.eclipse/org.eclipse.platform_4.30.0_1473617060_linux_gtk_x86_64/configuration/.settings/
-COPY org.eclipse.ui.ide.prefs           /home/$USERNAME/.eclipse/org.eclipse.platform_4.30.0_1473617060_linux_gtk_x86_64/configuration/.settings/org.eclipse.ui.ide.prefs
-RUN \
-  sed -i "s/%username%/$USERNAME/"      /home/$USERNAME/.eclipse/org.eclipse.platform_4.30.0_1473617060_linux_gtk_x86_64/configuration/.settings/org.eclipse.ui.ide.prefs
+  mkdir ~/work && \
+  chmod 700 ~/work
 
 # Prevent gnome-terminal from looking for accessibility tools
 ENV NO_AT_BRIDGE=1
